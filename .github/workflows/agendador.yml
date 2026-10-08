@@ -1,0 +1,39 @@
+name: Agendador de posts
+
+# Confere a cada 5 minutos se há post do Estúdio Tamirys na hora de publicar.
+# A chave fica criptografada em Settings → Secrets → CRON_SECRET.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+    - cron: "17 3 1,15 * *" # mantém o repositório ativo (o GitHub pausa agendamentos sem atividade por 60 dias)
+  workflow_dispatch:
+
+concurrency:
+  group: agendador
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    if: github.event.schedule != '17 3 1,15 * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Publicar o que está na hora
+        run: |
+          curl -fsS --max-time 300 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "https://psitamirysneves.vercel.app/api/cron/publish"
+
+  manter-ativo:
+    if: github.event.schedule == '17 3 1,15 * *'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .ultima-atividade
+          git config user.name "agendador"
+          git config user.email "agendador@users.noreply.github.com"
+          git add .ultima-atividade
+          git commit -m "manter agendador ativo" && git push
